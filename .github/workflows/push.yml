@@ -8,6 +8,7 @@ on:
   push:
     branches:
       - master
+      - arm64
       - release/v*
     tags:
       - 'v*'
@@ -221,76 +222,90 @@ jobs:
       env:
         JOB_NAME: ${{ github.job }}
         JOB_ID: ${{ github.run_id }}
-        DOCKER_IMAGE_IMMUDB: "codenotary/immudb"
-        DOCKER_IMAGE_IMMUDB_FIPS: "codenotary/immudb-fips"
-        DOCKER_IMAGE_IMMUADMIN: "codenotary/immuadmin"
-        DOCKER_IMAGE_IMMUADMIN_FIPS: "codenotary/immuadmin-fips"
-        DOCKER_IMAGE_IMMUCLIENT: "codenotary/immuclient"
-        DOCKER_IMAGE_IMMUCLIENT_FIPS: "codenotary/immuclient-fips"
+        DOCKER_IMAGE_IMMUDB: "${{ github.repository_owner }}/immudb"
+        DOCKER_IMAGE_IMMUDB_FIPS: "${{ github.repository_owner }}/immudb-fips"
+        DOCKER_IMAGE_IMMUADMIN: "${{ github.repository_owner }}/immuadmin"
+        DOCKER_IMAGE_IMMUADMIN_FIPS: "${{ github.repository_owner }}/immuadmin-fips"
+        DOCKER_IMAGE_IMMUCLIENT: "${{ github.repository_owner }}/immuclient"
+        DOCKER_IMAGE_IMMUCLIENT_FIPS: "${{ github.repository_owner }}/immuclient-fips"
         DOCKER_BUILDKIT: "1"
         DEBIAN_VERSION: bullseye-slim
         ALMA_VERSION: almalinux-8-minimal
       steps:
-        - uses: actions/checkout@v4
-        - name: Build docker images
-          shell: bash
-          run: |
-            if [[ "${GITHUB_REF}" =~ ^refs/tags/v([0-9]+)\.([A-Z0-9]+)\.([0-9]+)$ ]]; then
-              VERSION_TAG="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}.${BASH_REMATCH[3]}"
-              VERSION_TAG_SHORT="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}"
-            fi
+          - uses: actions/checkout@v4
 
-            docker build --tag "${DOCKER_IMAGE_IMMUDB}:dev" --target scratch -f build/Dockerfile .
-            docker build --tag "${DOCKER_IMAGE_IMMUDB}:dev-${DEBIAN_VERSION}" --target ${DEBIAN_VERSION} -f build/Dockerfile .
-            docker build --tag "${DOCKER_IMAGE_IMMUDB}:dev-${ALMA_VERSION}" -f build/Dockerfile.alma .
-            docker build --tag "${DOCKER_IMAGE_IMMUADMIN}:dev" -f build/Dockerfile.immuadmin .
-            docker build --tag "${DOCKER_IMAGE_IMMUCLIENT}:dev" -f build/Dockerfile.immuclient .
-            docker build --tag "${DOCKER_IMAGE_IMMUDB_FIPS}:dev" -f build/fips/Dockerfile .
-            docker build --tag "${DOCKER_IMAGE_IMMUADMIN_FIPS}:dev" -f build/fips/Dockerfile.immuadmin .
-            docker build --tag "${DOCKER_IMAGE_IMMUCLIENT_FIPS}:dev" -f build/fips/Dockerfile.immuclient .
+          - name: Set up QEMU
+            uses: docker/setup-qemu-action@v3
 
-            docker login -u "${{ secrets.REGISTRY_USER }}" -p "${{ secrets.REGISTRY_PASS }}"
+          - name: Set up Docker Buildx
+            uses: docker/setup-buildx-action@v3
 
-            docker push "${DOCKER_IMAGE_IMMUDB}:dev"
-            docker push "${DOCKER_IMAGE_IMMUDB}:dev-${DEBIAN_VERSION}"
-            docker push "${DOCKER_IMAGE_IMMUDB}:dev-${ALMA_VERSION}"
-            docker push "${DOCKER_IMAGE_IMMUADMIN}:dev"
-            docker push "${DOCKER_IMAGE_IMMUCLIENT}:dev"
-            docker push "${DOCKER_IMAGE_IMMUDB_FIPS}:dev"
-            docker push "${DOCKER_IMAGE_IMMUADMIN_FIPS}:dev"
-            docker push "${DOCKER_IMAGE_IMMUCLIENT_FIPS}:dev"
+          - name: Login to DockerHub
+            uses: docker/login-action@v3
+            with:
+                registry: ghcr.io
+                username: ${{ github.actor }}
+                password: ${{ secrets.GITHUB_TOKEN }}
 
-            if [[ ! -z "$VERSION_TAG" ]]; then
-              for tag in "${VERSION_TAG}" "${VERSION_TAG_SHORT}" "latest"; do
-                docker tag "${DOCKER_IMAGE_IMMUDB}:dev" "${DOCKER_IMAGE_IMMUDB}:${tag}"
-                docker push "${DOCKER_IMAGE_IMMUDB}:${tag}"
+          - name: Build and push Docker image for Dockerfile
+            uses: docker/build-push-action@v5
+            with:
+                context: .
+                platforms: linux/amd64,linux/arm64
+                push: true
+                tags: |
+                    ghcr.io/${{ github.repository_owner }}/immudb:dev
+                file: build/Dockerfile
 
-                docker tag "${DOCKER_IMAGE_IMMUDB}:dev-${DEBIAN_VERSION}" "${DOCKER_IMAGE_IMMUDB}:${tag}-${DEBIAN_VERSION}"
-                docker push "${DOCKER_IMAGE_IMMUDB}:${tag}-${DEBIAN_VERSION}"
+          - name: Build and push Docker image for Dockerfile.immuadmin
+            uses: docker/build-push-action@v5
+            with:
+                context: .
+                platforms: linux/amd64,linux/arm64
+                push: true
+                tags: |
+                    ghcr.io/${{ github.repository_owner }}/immuadmin:dev
+                file: build/Dockerfile.immuadmin
 
-                docker tag "${DOCKER_IMAGE_IMMUDB}:dev-${ALMA_VERSION}" "${DOCKER_IMAGE_IMMUDB}:${tag}-${ALMA_VERSION}"
-                docker push "${DOCKER_IMAGE_IMMUDB}:${tag}-${ALMA_VERSION}"
+          - name: Build and push Docker image for Dockerfile.immuclient
+            uses: docker/build-push-action@v5
+            with:
+                context: .
+                platforms: linux/amd64,linux/arm64
+                push: true
+                tags: |
+                    ghcr.io/${{ github.repository_owner }}/immuclient:dev
+                file: build/Dockerfile.immuclient
 
-                docker tag "${DOCKER_IMAGE_IMMUADMIN}:dev" "${DOCKER_IMAGE_IMMUADMIN}:${tag}"
-                docker push "${DOCKER_IMAGE_IMMUADMIN}:${tag}"
+          - name: Build and push Docker image for fips/Dockerfile
+            uses: docker/build-push-action@v5
+            with:
+                context: .
+                platforms: linux/amd64,linux/arm64
+                push: true
+                tags: |
+                    ghcr.io/${{ github.repository_owner }}/immudb-fips:dev
+                file: build/fips/Dockerfile
 
-                docker tag "${DOCKER_IMAGE_IMMUCLIENT}:dev" "${DOCKER_IMAGE_IMMUCLIENT}:${tag}"
-                docker push "${DOCKER_IMAGE_IMMUCLIENT}:${tag}"
+          - name: Build and push Docker image for fips/Dockerfile.immuadmin
+            uses: docker/build-push-action@v5
+            with:
+                context: .
+                platforms: linux/amd64,linux/arm64
+                push: true
+                tags: |
+                    ghcr.io/${{ github.repository_owner }}/immuadmin-fips:dev
+                file: build/fips/Dockerfile.immuadmin
 
-                docker tag "${DOCKER_IMAGE_IMMUDB_FIPS}:dev" "${DOCKER_IMAGE_IMMUDB_FIPS}:${tag}"
-                docker push "${DOCKER_IMAGE_IMMUDB_FIPS}:${tag}"
-
-                docker tag "${DOCKER_IMAGE_IMMUADMIN_FIPS}:dev" "${DOCKER_IMAGE_IMMUADMIN_FIPS}:${tag}"
-                docker push "${DOCKER_IMAGE_IMMUADMIN_FIPS}:${tag}"
-
-                docker tag "${DOCKER_IMAGE_IMMUCLIENT_FIPS}:dev" "${DOCKER_IMAGE_IMMUCLIENT_FIPS}:${tag}"
-                docker push "${DOCKER_IMAGE_IMMUCLIENT_FIPS}:${tag}"
-
-              done
-            fi
-
-            docker logout
-
+          - name: Build and push Docker image for fips/Dockerfile.immuclient
+            uses: docker/build-push-action@v5
+            with:
+                context: .
+                platforms: linux/amd64,linux/arm64
+                push: true
+                tags: |
+                    ghcr.io/${{ github.repository_owner }}/immuclient-fips:dev
+                file: build/fips/Dockerfile.immuclient
 
   coveralls:
     name: Publish coverage
