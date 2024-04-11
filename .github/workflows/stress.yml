@@ -40,7 +40,8 @@ jobs:
         ./stress_tool -mode auto -committers 100 -kvCount 1000 -txCount 10 -txRead -synced
         echo "duration_3=$SECONDS" >> $GITHUB_ENV
     - name: Create the Mattermost message
-      if: github.event.schedule == '0 0 * * *'
+      # These steps will only run when the workflow is triggered by a scheduled event and MATTERMOST_WEBHOOK_URL secret is set
+      if: github.event.schedule == '0 0 * * *' && secrets.MATTERMOST_WEBHOOK_URL
       run: >
         echo "{\"text\":\"### Stress tests results for scheduled daily run on ${{ github.ref_name }} branch\n
         | Step | Result | Duration |\n
@@ -51,7 +52,7 @@ jobs:
         **Check details [here](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})**
         \"}" > mattermost.json
     - name: Notify on immudb channel on Mattermost
-      if: github.event.schedule == '0 0 * * *'
+      if: github.event.schedule == '0 0 * * *' && secrets.MATTERMOST_WEBHOOK_URL
       uses: mattermost/action-mattermost-notify@master
       env:
         MATTERMOST_WEBHOOK_URL: ${{ secrets.MATTERMOST_WEBHOOK_URL }}
